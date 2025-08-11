@@ -30,7 +30,7 @@ app = FastAPI(title="Report Generator API", version="1.0.0")
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -242,7 +242,7 @@ class PDFGenerator:
             # Report Info
             info_data = [
                 ['Gerado em:', datetime.now().strftime('%d/%m/%Y %H:%M:%S')],
-                ['Tipo de Gráfico:', report_data['chart_config']['chart_type'].title()],
+                ['Type: ', report_data['chart_config']['chart_type'].title()],
                 ['Eixo X:', report_data['chart_config']['x_column']],
                 ['Eixo Y:', report_data['chart_config']['y_column']],
             ]
@@ -260,27 +260,27 @@ class PDFGenerator:
             story.append(info_table)
             story.append(Spacer(1, 20))
 
-            # Chart Image
-            # Dentro de PDFGenerator.create_report_pdf
+            # Chart Image - CORREÇÃO PRINCIPAL AQUI
+            temp_image_path = None  # Inicializar a variável
             if 'chart_image' in report_data:
                 try:
                     image_data = base64.b64decode(report_data['chart_image'])
                     temp_image_path = f"temp_chart_{uuid.uuid4().hex[:8]}.png"
 
+                    # Salvar a imagem temporária
                     with open(temp_image_path, 'wb') as f:
                         f.write(image_data)
 
+                    # Adicionar ao PDF
+                    story.append(Paragraph("Gráfico", styles['Heading2']))
+                    story.append(Spacer(1, 12))
                     story.append(Image(temp_image_path, width=6 * inch, height=3.6 * inch))
                     story.append(Spacer(1, 20))
 
                 except Exception as e:
                     print(f"Erro ao processar imagem: {e}")
-
-            doc.build(story)
-
-            # Só remove aqui
-            if 'chart_image' in report_data and os.path.exists(temp_image_path):
-                os.remove(temp_image_path)
+                    story.append(Paragraph("Erro ao carregar gráfico", styles['Normal']))
+                    story.append(Spacer(1, 20))
 
             # Statistics
             if 'statistics' in report_data:
@@ -310,9 +310,25 @@ class PDFGenerator:
                 story.append(Spacer(1, 12))
                 story.append(stats_table)
 
+            # CORREÇÃO: Gerar o PDF ANTES de deletar a imagem
             doc.build(story)
+
+            # CORREÇÃO: Remover arquivo temporário APENAS APÓS gerar o PDF
+            if temp_image_path and os.path.exists(temp_image_path):
+                try:
+                    os.remove(temp_image_path)
+                except Exception as e:
+                    print(f"Erro ao remover imagem temporária: {e}")
+
             return filepath
+
         except Exception as e:
+            # Cleanup em caso de erro
+            if 'temp_image_path' in locals() and temp_image_path and os.path.exists(temp_image_path):
+                try:
+                    os.remove(temp_image_path)
+                except:
+                    pass
             print(f"Erro ao gerar PDF: {e}")
             raise
 
