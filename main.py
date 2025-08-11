@@ -534,4 +534,4 @@ if __name__ == "__main__":
     print("📊 API Gerador de Relatórios v1.0.0")
     print("🌐 Servidor rodando em: http://localhost:8000")
     print("📚 Documentação disponível em: http://localhost:8000/docs")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
