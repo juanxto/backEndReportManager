@@ -161,143 +161,160 @@ class DataProcessor:
                 'statistics': stats
             }
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error processing chart data: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Erro ao processar dados do gráfico: {str(e)}")
 
 
 class ChartGenerator:
     @staticmethod
     def create_matplotlib_chart(data: List[dict], chart_type: str, title: str = None) -> str:
-        plt.style.use('default')
-        fig, ax = plt.subplots(figsize=(10, 6))
+        try:
+            plt.style.use('default')
+            fig, ax = plt.subplots(figsize=(10, 6))
 
-        names = [str(item['name']) for item in data]
-        values = [float(item['value']) for item in data]
+            names = [str(item['name']) for item in data]
+            values = [float(item['value']) for item in data]
 
-        if chart_type == 'bar':
-            bars = ax.bar(names, values, color='steelblue', alpha=0.7)
-            ax.set_xlabel('Categories')
-            ax.set_ylabel('Values')
+            if chart_type == 'bar':
+                bars = ax.bar(names, values, color='steelblue', alpha=0.7)
+                ax.set_xlabel('Categorias')
+                ax.set_ylabel('Valores')
 
-            for bar in bars:
-                height = bar.get_height()
-                ax.text(bar.get_x() + bar.get_width() / 2., height,
-                        f'{int(height)}', ha='center', va='bottom')
+                for bar in bars:
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width() / 2., height,
+                            f'{int(height)}', ha='center', va='bottom')
 
-        elif chart_type == 'line':
-            ax.plot(names, values, marker='o', linewidth=2, markersize=6, color='steelblue')
-            ax.set_xlabel('Categories')
-            ax.set_ylabel('Values')
-            ax.grid(True, alpha=0.3)
+            elif chart_type == 'line':
+                ax.plot(names, values, marker='o', linewidth=2, markersize=6, color='steelblue')
+                ax.set_xlabel('Categorias')
+                ax.set_ylabel('Valores')
+                ax.grid(True, alpha=0.3)
 
-        elif chart_type == 'pie':
-            colors_list = plt.cm.Set3(np.linspace(0, 1, len(data)))
-            wedges, texts, autotexts = ax.pie(values, labels=names, autopct='%1.1f%%',
-                                              colors=colors_list, startangle=90)
-            ax.axis('equal')
+            elif chart_type == 'pie':
+                colors_list = plt.cm.Set3(np.linspace(0, 1, len(data)))
+                wedges, texts, autotexts = ax.pie(values, labels=names, autopct='%1.1f%%',
+                                                  colors=colors_list, startangle=90)
+                ax.axis('equal')
 
-        if title:
-            ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+            if title:
+                ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
 
-        if chart_type != 'pie':
-            plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
+            if chart_type != 'pie':
+                plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
 
-        # Save to base64
-        buffer = io.BytesIO()
-        plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
-        buffer.seek(0)
-        image_base64 = base64.b64encode(buffer.getvalue()).decode()
-        plt.close()
+            # Save to base64
+            buffer = io.BytesIO()
+            plt.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+            buffer.seek(0)
+            image_base64 = base64.b64encode(buffer.getvalue()).decode()
+            plt.close()
 
-        return image_base64
+            return image_base64
+        except Exception as e:
+            print(f"Erro ao gerar gráfico: {e}")
+            raise
 
 
 class PDFGenerator:
     @staticmethod
     def create_report_pdf(report_data: dict) -> str:
-        filename = f"report_{uuid.uuid4().hex[:8]}.pdf"
-        os.makedirs("reports", exist_ok=True)
-        filepath = f"reports/{filename}"
+        try:
+            filename = f"report_{uuid.uuid4().hex[:8]}.pdf"
+            os.makedirs("reports", exist_ok=True)
+            filepath = f"reports/{filename}"
 
-        doc = SimpleDocTemplate(filepath, pagesize=A4)
-        styles = getSampleStyleSheet()
-        story = []
+            doc = SimpleDocTemplate(filepath, pagesize=A4)
+            styles = getSampleStyleSheet()
+            story = []
 
-        # Title
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=24,
-            spaceAfter=30,
-            textColor=colors.HexColor('#1f2937')
-        )
-        story.append(Paragraph(report_data['name'], title_style))
-        story.append(Spacer(1, 12))
+            # Title
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                spaceAfter=30,
+                textColor=colors.HexColor('#1f2937')
+            )
+            story.append(Paragraph(report_data['name'], title_style))
+            story.append(Spacer(1, 12))
 
-        # Report Info
-        info_data = [
-            ['Generated:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
-            ['Chart Type:', report_data['chart_config']['chart_type'].title()],
-            ['X Axis:', report_data['chart_config']['x_column']],
-            ['Y Axis:', report_data['chart_config']['y_column']],
-        ]
-
-        info_table = Table(info_data, colWidths=[2 * inch, 4 * inch])
-        info_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.grey),
-            ('TEXTCOLOR', (0, 0), (0, -1), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ]))
-
-        story.append(info_table)
-        story.append(Spacer(1, 20))
-
-        # Chart Image
-        if 'chart_image' in report_data:
-            image_data = base64.b64decode(report_data['chart_image'])
-            temp_image_path = f"temp_chart_{uuid.uuid4().hex[:8]}.png"
-
-            with open(temp_image_path, 'wb') as f:
-                f.write(image_data)
-
-            story.append(Image(temp_image_path, width=6 * inch, height=3.6 * inch))
-            story.append(Spacer(1, 20))
-
-            os.remove(temp_image_path)
-
-        # Statistics
-        if 'statistics' in report_data:
-            stats = report_data['statistics']
-            stats_data = [
-                ['Statistic', 'Value'],
-                ['Total Points', str(stats['total_points'])],
-                ['Maximum Value', f"{stats['max_value']:,.2f}"],
-                ['Minimum Value', f"{stats['min_value']:,.2f}"],
-                ['Average Value', f"{stats['avg_value']:,.2f}"],
-                ['Sum of Values', f"{stats['sum_value']:,.2f}"],
+            # Report Info
+            info_data = [
+                ['Gerado em:', datetime.now().strftime('%d/%m/%Y %H:%M:%S')],
+                ['Tipo de Gráfico:', report_data['chart_config']['chart_type'].title()],
+                ['Eixo X:', report_data['chart_config']['x_column']],
+                ['Eixo Y:', report_data['chart_config']['y_column']],
             ]
 
-            stats_table = Table(stats_data, colWidths=[2 * inch, 2 * inch])
-            stats_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            info_table = Table(info_data, colWidths=[2 * inch, 4 * inch])
+            info_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (0, -1), colors.grey),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ]))
 
-            story.append(Paragraph("Statistics Summary", styles['Heading2']))
-            story.append(Spacer(1, 12))
-            story.append(stats_table)
+            story.append(info_table)
+            story.append(Spacer(1, 20))
 
-        doc.build(story)
-        return filepath
+            # Chart Image
+            # Dentro de PDFGenerator.create_report_pdf
+            if 'chart_image' in report_data:
+                try:
+                    image_data = base64.b64decode(report_data['chart_image'])
+                    temp_image_path = f"temp_chart_{uuid.uuid4().hex[:8]}.png"
+
+                    with open(temp_image_path, 'wb') as f:
+                        f.write(image_data)
+
+                    story.append(Image(temp_image_path, width=6 * inch, height=3.6 * inch))
+                    story.append(Spacer(1, 20))
+
+                except Exception as e:
+                    print(f"Erro ao processar imagem: {e}")
+
+            doc.build(story)
+
+            # Só remove aqui
+            if 'chart_image' in report_data and os.path.exists(temp_image_path):
+                os.remove(temp_image_path)
+
+            # Statistics
+            if 'statistics' in report_data:
+                stats = report_data['statistics']
+                stats_data = [
+                    ['Estatística', 'Valor'],
+                    ['Total de Pontos', str(stats['total_points'])],
+                    ['Valor Máximo', f"{stats['max_value']:,.2f}"],
+                    ['Valor Mínimo', f"{stats['min_value']:,.2f}"],
+                    ['Valor Médio', f"{stats['avg_value']:,.2f}"],
+                    ['Soma dos Valores', f"{stats['sum_value']:,.2f}"],
+                ]
+
+                stats_table = Table(stats_data, colWidths=[2 * inch, 2 * inch])
+                stats_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ]))
+
+                story.append(Paragraph("Resumo Estatístico", styles['Heading2']))
+                story.append(Spacer(1, 12))
+                story.append(stats_table)
+
+            doc.build(story)
+            return filepath
+        except Exception as e:
+            print(f"Erro ao gerar PDF: {e}")
+            raise
 
 
 # Initialize database
@@ -307,13 +324,13 @@ init_db()
 # API Endpoints
 @app.get("/")
 async def root():
-    return {"message": "Report Generator API", "version": "1.0.0"}
+    return {"message": "API Gerador de Relatórios", "version": "1.0.0"}
 
 
 @app.post("/upload-csv")
 async def upload_csv(file: UploadFile = File(...)):
     if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Only CSV files are allowed")
+        raise HTTPException(status_code=400, detail="Apenas arquivos CSV são permitidos")
 
     content = await file.read()
     result = DataProcessor.process_csv(content)
@@ -331,7 +348,7 @@ async def generate_chart(request: dict):
         x_col = request['x_column']
         y_col = request['y_column']
         chart_type = request['chart_type']
-        title = request.get('title', f'{y_col} by {x_col}')
+        title = request.get('title', f'{y_col} por {x_col}')
 
         chart_result = DataProcessor.generate_chart_data(data, x_col, y_col)
 
@@ -345,7 +362,8 @@ async def generate_chart(request: dict):
             'chart_image': chart_image
         }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"Erro ao gerar gráfico: {e}")
+        raise HTTPException(status_code=400, detail=f"Erro ao gerar gráfico: {str(e)}")
 
 
 @app.post("/save-report")
@@ -353,27 +371,32 @@ async def save_report(request: ReportRequest):
     try:
         report_id = str(uuid.uuid4())
 
+        # Gerar dados do gráfico
         chart_result = DataProcessor.generate_chart_data(
             request.data,
             request.chart_config.x_column,
             request.chart_config.y_column
         )
 
+        # Gerar imagem do gráfico
         chart_image = ChartGenerator.create_matplotlib_chart(
             chart_result['chart_data'],
             request.chart_config.chart_type,
             request.chart_config.title or request.name
         )
 
+        # Preparar dados para o PDF - CORRIGIDO: usando model_dump() ao invés de dict()
         pdf_data = {
             'name': request.name,
-            'chart_config': request.chart_config.dict(),
+            'chart_config': request.chart_config.model_dump(),  # CORRIGIDO AQUI
             'chart_image': chart_image,
             'statistics': chart_result['statistics']
         }
 
+        # Gerar PDF
         pdf_path = PDFGenerator.create_report_pdf(pdf_data)
 
+        # Salvar no banco de dados
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -395,74 +418,104 @@ async def save_report(request: ReportRequest):
 
         return {
             'id': report_id,
-            'message': 'Report saved successfully',
+            'message': 'Relatório salvo com sucesso',
             'pdf_path': pdf_path
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Erro ao salvar relatório: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar relatório: {str(e)}")
 
 
 @app.get("/reports")
 async def get_reports():
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            'SELECT id, name, created_at, chart_type, x_column, y_column, title FROM reports ORDER BY created_at DESC')
-        rows = cursor.fetchall()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'SELECT id, name, created_at, chart_type, x_column, y_column, title FROM reports ORDER BY created_at DESC')
+            rows = cursor.fetchall()
 
-        reports = []
-        for row in rows:
-            reports.append({
-                'id': row[0],
-                'name': row[1],
-                'created_at': row[2],
-                'chart_type': row[3],
-                'x_column': row[4],
-                'y_column': row[5],
-                'title': row[6]
-            })
+            reports = []
+            for row in rows:
+                reports.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'created_at': row[2],
+                    'chart_type': row[3],
+                    'x_column': row[4],
+                    'y_column': row[5],
+                    'title': row[6]
+                })
 
-        return {'reports': reports}
+            return {'reports': reports}
+    except Exception as e:
+        print(f"Erro ao carregar relatórios: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao carregar relatórios")
 
 
 @app.get("/download-report/{report_id}")
 async def download_report(report_id: str):
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT file_path, name FROM reports WHERE id = ?', (report_id,))
-        row = cursor.fetchone()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT file_path, name FROM reports WHERE id = ?', (report_id,))
+            row = cursor.fetchone()
 
-        if not row or not os.path.exists(row[0]):
-            raise HTTPException(status_code=404, detail="Report file not found")
+            if not row:
+                raise HTTPException(status_code=404, detail="Relatório não encontrado")
 
-        return FileResponse(
-            path=row[0],
-            filename=f"{row[1]}.pdf",
-            media_type='application/pdf'
-        )
+            if not os.path.exists(row[0]):
+                raise HTTPException(status_code=404, detail="Arquivo do relatório não encontrado")
+
+            return FileResponse(
+                path=row[0],
+                filename=f"{row[1]}.pdf",
+                media_type='application/pdf'
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Erro ao fazer download: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao fazer download do relatório")
 
 
 @app.delete("/reports/{report_id}")
 async def delete_report(report_id: str):
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute('SELECT file_path FROM reports WHERE id = ?', (report_id,))
-        row = cursor.fetchone()
+            # Buscar o caminho do arquivo
+            cursor.execute('SELECT file_path FROM reports WHERE id = ?', (report_id,))
+            row = cursor.fetchone()
 
-        if row and row[0] and os.path.exists(row[0]):
-            os.remove(row[0])
+            # Remover arquivo físico se existir
+            if row and row[0] and os.path.exists(row[0]):
+                try:
+                    os.remove(row[0])
+                except Exception as e:
+                    print(f"Erro ao remover arquivo: {e}")
 
-        cursor.execute('DELETE FROM reports WHERE id = ?', (report_id,))
-        conn.commit()
+            # Remover do banco de dados
+            cursor.execute('DELETE FROM reports WHERE id = ?', (report_id,))
+            conn.commit()
 
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Report not found")
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Relatório não encontrado")
 
-        return {'message': 'Report deleted successfully'}
+            return {'message': 'Relatório deletado com sucesso'}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Erro ao deletar relatório: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao deletar relatório")
 
 
 if __name__ == "__main__":
     import uvicorn
 
+    print("🚀 Iniciando servidor da API...")
+    print("📊 API Gerador de Relatórios v1.0.0")
+    print("🌐 Servidor rodando em: http://localhost:8000")
+    print("📚 Documentação disponível em: http://localhost:8000/docs")
     uvicorn.run(app, host="0.0.0.0", port=8000)
