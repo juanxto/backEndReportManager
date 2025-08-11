@@ -1,18 +1,10 @@
-[[services]]
+app = "backendreportmanager"
+
+[build]
+
+[env]
+  PORT = "8080"
+
+[http_service]
   internal_port = 8080
-  protocol = "tcp"
-
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 25
-    soft_limit = 20
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-
-  [[services.checks]]
-    type = "http"
-    interval = "10s"
-    timeout = "2s"
-    path = "/health"  # ← Ensure this route works!
+  force_https = true
